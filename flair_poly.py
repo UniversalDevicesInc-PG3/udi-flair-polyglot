@@ -6,7 +6,7 @@ based on the NodeServer template for Polyglot v2 written in Python2/3 by Einstei
 Using the Flair API Client - https://github.com/flair-systems/flair-api-client-py
 """
 
-import polyinterface
+import udi_interface
 import hashlib
 import time
 import json
@@ -17,7 +17,7 @@ from flair_api import make_client
 from flair_api import ApiError
 from flair_api import EmptyBodyException
 
-LOGGER = polyinterface.LOGGER
+LOGGER = udi_interface.LOGGER
 SERVERDATA = json.load(open('server.json'))
 VERSION = SERVERDATA['credits'][0]['version']
 
@@ -32,10 +32,11 @@ def get_profile_info(logger):
     f.close()
     return { 'version': pv }
 
-class Controller(polyinterface.Controller):
+class Controller(udi_interface.Node):
 
-    def __init__(self, polyglot):
-        super(Controller, self).__init__(polyglot)
+    def __init__(self, polyglot, primary, address, name):
+        super(Controller, self).__init__(polyglot, primary, address, name)
+        self.poly = polyglot
         self.name = 'Flair'
         self.queryON = False
         self.client_id = ""
@@ -44,74 +45,69 @@ class Controller(polyinterface.Controller):
         self.discovery_thread = None
         self.hb = 0
 
-    def start(self):
-        LOGGER.info('Started Flair for v2 NodeServer version %s', str(VERSION))
-        self.setDriver('ST', 0)
-        try:
-            if 'client_id' in self.polyConfig['customParams']:
-                self.client_id = self.polyConfig['customParams']['client_id']
+        polyglot.subscribe(polyglot.START, self.start, address)
+        polyglot.subscribe(polyglot.CUSTOMPARAMS, self.parameterHandler)
+        polyglot.subscribe(polyglot.POLL, self.poll)
 
-            if 'client_secret' in self.polyConfig['customParams']:
-                self.client_secret = self.polyConfig['customParams']['client_secret']
+        polyglot.ready()
+        polyglot.addNode(self)
+
+    def parameterHandler(self, params):
+        self.poly.Notices.clear()
+        try:
+            if 'client_id' in params:
+                self.client_id = params['client_id']
+
+            if 'client_secret' in params:
+                self.client_secret = params['client_secret']
 
             if self.client_id == "" or self.client_secret == "" :
                 LOGGER.error('Flair requires \'client_id\' \'client_secret\' parameters to be specified in custom configuration.')
+                self.poly.Notices['cfg'] = 'Flair requires you specify both the client_id and client_secret custom parameters'
                 return False
             else:
-                self.check_profile()
                 self.heartbeat()
                 self.discover()
                 
         except Exception as ex:
             LOGGER.error('Error starting Flair NodeServer: %s', str(ex))
-            
-    def shortPoll(self):
-        try:
-            if self.discovery_thread is not None:
-                if self.discovery_thread.is_alive():
-                    LOGGER.debug('Skipping shortPoll() while discovery in progress...')
-                    return
-                else:
-                    self.discovery_thread = None
-            self.update()
-        except Exception as ex:
-            LOGGER.error('Error shortPoll: %s', str(ex))
-            
-    def longPoll(self):
-        try :
-            self.heartbeat()
-            if self.discovery_thread is not None:
-                if self.discovery_thread.is_alive():
-                    LOGGER.debug('Skipping longPoll() while discovery in progress...')
-                    return	
-                else: 
-                    self.discovery_thread = None	
-                    
-            # Renew Token
-            self.api_client.oauth_token()
-            self.api_client.api_root_response()
-        except Exception as ex:
-            LOGGER.error('Error longPoll: %s', str(ex))
-    
-    def check_profile(self):
-        self.profile_info = get_profile_info(LOGGER)
-        # Set Default profile version if not Found
-        cdata = deepcopy(self.polyConfig['customData'])
-        LOGGER.info('check_profile: profile_info={0} customData={1}'.format(self.profile_info,cdata))
-        if not 'profile_info' in cdata:
-            cdata['profile_info'] = { 'version': 0 }
-        if self.profile_info['version'] == cdata['profile_info']['version']:
-            self.update_profile = False
-        else:
-            self.update_profile = True
-            self.poly.installprofile()
-        LOGGER.info('check_profile: update_profile={}'.format(self.update_profile))
-        cdata['profile_info'] = self.profile_info
-        self.saveCustomData(cdata)
 
-    def install_profile(self,command):
-        LOGGER.info("install_profile:")
-        self.poly.installprofile()
+
+    def start(self):
+        self.poly.updateProfile()
+        self.poly.setCustomParamsDoc()
+
+        LOGGER.info('Started Flair for v3 NodeServer version %s', str(VERSION))
+        self.setDriver('ST', 0)
+
+            
+    def poll(self, pollflag):
+        if 'shortPoll' in pollflag:
+            try:
+                if self.discovery_thread is not None:
+                    if self.discovery_thread.is_alive():
+                        LOGGER.debug('Skipping shortPoll() while discovery in progress...')
+                        return
+                    else:
+                        self.discovery_thread = None
+                self.update()
+            except Exception as ex:
+                LOGGER.error('Error shortPoll: %s', str(ex))
+        else:
+            try :
+                self.heartbeat()
+                if self.discovery_thread is not None:
+                    if self.discovery_thread.is_alive():
+                        LOGGER.debug('Skipping longPoll() while discovery in progress...')
+                        return	
+                    else: 
+                        self.discovery_thread = None	
+                    
+                # Renew Token
+                self.api_client.oauth_token()
+                self.api_client.api_root_response()
+            except Exception as ex:
+                LOGGER.error('Error longPoll: %s', str(ex))
     
     def heartbeat(self):
         LOGGER.debug('heartbeat hb={}'.format(str(self.hb)))
@@ -123,15 +119,15 @@ class Controller(polyinterface.Controller):
             self.hb = 0
             
     def query(self):
-        for node in self.nodes:
-            self.nodes[node].reportDrivers()
+        for node in self.poly.nodes():
+            node.reportDrivers()
             
     def update(self):
         try :
             self.setDriver('ST', 1)
-            for node in self.nodes:
-                if self.nodes[node].queryON == True :
-                    self.nodes[node].update()
+            for node in self.poly.nodes():
+                if node.queryON == True :
+                    node.update()
         except Exception as ex:
             LOGGER.error('Error update: %s', str(ex))
     
@@ -156,19 +152,19 @@ class Controller(polyinterface.Controller):
             
         for structure in structures:
             strHash = str(int(hashlib.md5(structure.attributes['name'].encode('utf8')).hexdigest(), 16) % (10 ** 8))
-            self.addNode(FlairStructure(self, strHash, strHash,structure.attributes['name'],structure))
+            self.poly.addNode(FlairStructure(self.poly, strHash, strHash,structure.attributes['name'],structure))
             #time.sleep(5)
             rooms = structure.get_rel('rooms')
             roomNumber = 1
             for room in rooms:
                 strHashRoom = str(int(hashlib.md5(room.attributes['name'].encode('utf8')).hexdigest(), 16) % (10 ** 8))
-                self.addNode(FlairRoom(self, strHash,strHashRoom,'R' + str(roomNumber) + '_' + room.attributes['name'],room))
+                self.poly.addNode(FlairRoom(self.poly, strHash,strHashRoom,'R' + str(roomNumber) + '_' + room.attributes['name'],room))
                 
                 try:
                     pucks = room.get_rel('pucks')
                     for puck in pucks:
                         strHashPucks = str(int(hashlib.md5(puck.attributes['name'].encode('utf8')).hexdigest(), 16) % (10 ** 8))
-                        self.addNode(FlairPuck(self, strHash,strHashRoom[:4]+strHashPucks,'R' + str(roomNumber) + '_' + puck.attributes['name'],puck,room))
+                        self.poly.addNode(FlairPuck(self.poly, strHash,strHashRoom[:4]+strHashPucks,'R' + str(roomNumber) + '_' + puck.attributes['name'],puck,room))
                 except EmptyBodyException as ex:
                     pass
             
@@ -176,7 +172,7 @@ class Controller(polyinterface.Controller):
                     vents = room.get_rel('vents')
                     for vent in vents :
                         strHashVents = str(int(hashlib.md5(vent.attributes['name'].encode('utf8')).hexdigest(), 16) % (10 ** 8))
-                        self.addNode(FlairVent(self, strHash, strHashRoom[:4]+strHashVents ,'R' + str(roomNumber) + '_' + vent.attributes['name'],vent,room))
+                        self.poly.addNode(FlairVent(self.poly, strHash, strHashRoom[:4]+strHashVents ,'R' + str(roomNumber) + '_' + vent.attributes['name'],vent,room))
                 except EmptyBodyException as ex:
                     pass
                 
@@ -191,7 +187,7 @@ class Controller(polyinterface.Controller):
                }
     drivers = [{'driver': 'ST', 'value': 0, 'uom': 2}]
     
-class FlairStructure(polyinterface.Node):
+class FlairStructure(udi_interface.Node):
 
     SPM = ['Home Evenness For Active Rooms Flair Setpoint','Home Evenness For Active Rooms Follow Third Party']
     HAM = ['Manual','Third Party Home Away','Flair Autohome Autoaway']
@@ -203,9 +199,6 @@ class FlairStructure(polyinterface.Node):
         self.queryON = True
         self.name = name
         self.objStructure = struct
-   
-    def start(self):
-        pass
    
     def setMode(self, command):
         try :
@@ -270,7 +263,7 @@ class FlairStructure(polyinterface.Node):
                 'SET_EVENESS' : setEven,
                 'QUERY': query }
    
-class FlairVent(polyinterface.Node):
+class FlairVent(udi_interface.Node):
 
     def __init__(self, controller, primary, address, name, vent,room):
 
@@ -279,9 +272,6 @@ class FlairVent(polyinterface.Node):
         self.name = name
         self.objVent = vent
         self.objRoom = room
-        
-    def start(self):
-        pass
         
     def setOpen(self, command):
         
@@ -330,7 +320,7 @@ class FlairVent(polyinterface.Node):
     commands = { 'SET_OPEN' : setOpen,
                  'QUERY': query}
     
-class FlairPuck(polyinterface.Node):
+class FlairPuck(udi_interface.Node):
 
     def __init__(self, controller, primary, address, name, puck,room):
 
@@ -340,9 +330,6 @@ class FlairPuck(polyinterface.Node):
         self.objPuck = puck
         self.objRoom = room
         
-    def start(self):
-        pass
-    
     def query(self):
         self.reportDrivers()
     
@@ -378,7 +365,7 @@ class FlairPuck(polyinterface.Node):
     id = 'FLAIR_PUCK'
     commands = {  'QUERY': query }
 
-class FlairRoom(polyinterface.Node):
+class FlairRoom(udi_interface.Node):
 
     def __init__(self, controller, primary, address, name,room):
 
@@ -387,9 +374,6 @@ class FlairRoom(polyinterface.Node):
         self.name = name
         self.objRoom = room
         
-    def start(self):
-        pass
-    
     def query(self):
         self.reportDrivers()
     
@@ -444,9 +428,9 @@ class FlairRoom(polyinterface.Node):
     
 if __name__ == "__main__":
     try:
-        polyglot = polyinterface.Interface('FlairNodeServer')
+        polyglot = udi_interface.Interface([])
         polyglot.start()
-        control = Controller(polyglot)
-        control.runForever()
+        Controller(polyglot, 'controller', 'controller', 'FlairNodeServer')
+        polyglot.runForever()
     except (KeyboardInterrupt, SystemExit):
         sys.exit(0)

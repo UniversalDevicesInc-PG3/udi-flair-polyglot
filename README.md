@@ -1,19 +1,15 @@
-# Flair Polyglot V2 Node Server
+# Flair Polyglot V3 Node Server
 
 ![Build Status](https://travis-ci.org/therealmysteryman/udi-flair-polyglot.svg?branch=master)
 
-This Poly provides an interface between Flair Vent and Polyglot v2 server. Has been tested on a HVAC system using a Puck in Gateway mode and a few vents throughout the house. https://flair.co/
+This Poly provides an interface between Flair Vent and Polyglot v3 server. Has been tested on a HVAC system using a Puck in Gateway mode and a few vents throughout the house. https://flair.co/
 
 #### Installation
 
 Installation instructions
 
-You can install from Polyglot V2 store or manually : 
-
-1. cd ~/.polyglot/nodeservers
-2. git clone https://github.com/therealmysteryman/udi-flair-polyglot.git
-3. run ./install.sh to install the required dependency.
-4. Add a custom variable named host containing the client_id and client_secret. Those value need to be requested from Flair Support.
+1. Install from the Polyglot V3 node server store
+2. Add a custom variable named host containing the client_id and client_secret. Those value need to be requested from Flair Support.
 
 #### Source
 

@@ -7,15 +7,20 @@
     "shortPoll": "90",
     "longPoll": "600",
     "description": "Flair system to the ISY994.",
-    "notice": "https://github.com/therealmysteryman/udi-flair-polyglot/blob/master/LICENSE",
+    "notice": "https://github.com/UniversalDevicesInc-PG3/udi-flair-polyglot/blob/master/LICENSE",
+	"logLevel": "INFO",
+	"customParams": {
+		"client_id": "",
+		"client_secret": ""
+	},
     "credits": [
         {
-            "title": "udi-flair-poly: A Polyglot v2 interface to Flair API",
+            "title": "udi-flair-poly: A Polyglot v3 interface to Flair API",
             "author": "AutomationGeek",
-            "version": "2.0.23",
-            "date": "January 24, 2021",
-            "source": "https://github.com/therealmysteryman/udi-flair-polyglot",
-            "license": "https://github.com/therealmysteryman/udi-flair-polyglot/blob/master/LICENSE"
+            "version": "3.0.0",
+            "date": "September 27, 2021",
+            "source": "https://github.com/UniversalDevicesInc-PG3/udi-flair-polyglot",
+            "license": "https://github.com/UniversalDevicesInc-PG3/udi-flair-polyglot/blob/master/LICENSE"
         },
 	{
             "title": "udi-poly-template-python: A Polyglot v2 Poly template",
@@ -33,5 +38,14 @@
             "source": "https://github.com/flair-systems/flair-api-client-py",
             "license": "https://raw.githubusercontent.com/flair-systems/flair-api-client-py/master/LICENSE.txt"
         }
-    ]
+    ],
+	"store": {
+		"developer": "bpaauwe@bobsplace.com",
+		"purchaseOptions": [
+			{
+				"isPerpetual": true,
+				"price": 0
+			}
+		]
+	}
 }

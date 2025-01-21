@@ -340,6 +340,7 @@ class FlairPuck(udi_interface.Node):
             else:
                 self.setDriver('GV2', 0)
 
+            LOGGER.debug('puck attributes: {}'.format(self.objPuck.attributes))
             tempC = int(self.objPuck.attributes['current-temperature-c'])  if self.objPuck.attributes['current-temperature-c'] != None else 0 
             tempF = (tempC * 9/5) + 32
                 
@@ -349,6 +350,7 @@ class FlairPuck(udi_interface.Node):
             
             # Get current-reading
             creading = self.objPuck.get_rel('current-reading')
+            LOGGER.debug('puck current-reading: {}'.format(creading))
             self.setDriver('GV12', creading.attributes['rssi'])
             self.setDriver('GV8', creading.attributes['system-voltage'])
                
@@ -429,7 +431,7 @@ class FlairRoom(udi_interface.Node):
 if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
-        polyglot.start()
+        polyglot.start('3.0.0')
         Controller(polyglot, 'controller', 'controller', 'FlairNodeServer')
         polyglot.runForever()
     except (KeyboardInterrupt, SystemExit):

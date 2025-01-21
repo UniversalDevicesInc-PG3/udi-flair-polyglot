@@ -1,9 +1,12 @@
 import requests
+import udi_interface
 
 try:
     from urllib.parse import urljoin
 except ImportError:
     from urlparse import urljoin
+
+LOGGER = udi_interface.LOGGER
 
 DEFAULT_CLIENT_HEADERS = {
     'Accept': 'application/vnd.api+json',
@@ -333,6 +336,7 @@ class Client(object):
         elif resp.status_code >= 400:
             raise ApiError(resp)
         else:
+            LOGGER.debug('resp = {}'.format(body))
             return body
 
 

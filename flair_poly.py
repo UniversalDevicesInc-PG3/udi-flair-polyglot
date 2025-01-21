@@ -225,14 +225,62 @@ class FlairStructure(udi_interface.Node):
         self.reportDrivers()
         
     def update(self):
+        '''
+        This appears to just send the data we got during discovery.  Nothing
+        here is being updated.
+        '''
         try:
+            rooms = self.objStructure.get_rel('rooms')
+            for room in rooms:
+                '''
+                Here's what we have for each room.  How do we map this to
+                the room nodes?
+                {
+                'name': 'Guest Room',
+                'created-at': '2024-06-29T01:38:25.448999+00:00',
+                'set-point-c': 18.33,
+                'pucks-inactive': 'Active',
+                'room-type': None,
+                'active': True, 
+                'updated-at': '2025-01-21T23:00:18.335236+00:00', 
+                'hold-until-schedule-event': True, 
+                'humidity-away-max': 80, 
+                'room-conclusion-mode': 'HEAT', 
+                'windows': None, 
+                'temp-away-min-c': 16.0, 
+                'state-updated-at': '2025-01-21T16:26:57.771938+00:00', 
+                'frozen-pipe-pet-protect': True, 
+                'level': None, 
+                'occupancy-mode': 'Flair Auto', 
+                'set-point-manual': True, 
+                'preheat-precool': True, 
+                'current-humidity': 28.0, 
+                'temp-away-max-c': 22.5, 
+                'hold-reason': 'Set by Dale', 
+                'current-temperature-c': 17.73, 
+                'air-return': False, 
+                'heat-cool-mode': 'HEAT', 
+                'hold-until': None, 
+                'room-away-mode': 'Smart Away', 
+                'humidity-away-min': 10}
+                '''
+                LOGGER.debug('RAW Room: {}'.format(room.attributes))
+                strHashRoom = str(int(hashlib.md5(room.attributes['name'].encode('utf8')).hexdigest(), 16) % (10 ** 8))
+                rnode = self.poly.getNode(strHashRoom)
+
+                # temperature (c and f), humidity, setpoint 
+                LOGGER.error('TODO: Update node {} --> {} {} {}'.format(rnode.name, room.attributes['current-temperature-c'], room.attributes['current-humidity'], room.attributes['set-point-c']))
+                rnode.new_update(room.attributes['current-temperature-c'], room.attributes['current-humidity'], room.attributes['set-point-c'])
+
+
             if  self.objStructure.attributes['is-active'] is True:
                 self.setDriver('GV2', 1)
             else:
                 self.setDriver('GV2', 0)
             
-            tempC = int(self.objStructure.attributes['set-point-temperature-c'])
+            tempC = float(self.objStructure.attributes['set-point-temperature-c'])
             tempF = (tempC * 9/5) + 32
+            LOGGER.error('BOB-STRUCTURE: {} / {} / {} -- {}'.format(self.name, tempC, tempF, self.objStructure.attributes['created-at']))
             
             self.setDriver('CLITEMP', round(tempC,1))
             self.setDriver('GV7', round(tempF,1))
@@ -249,13 +297,13 @@ class FlairStructure(udi_interface.Node):
         except ApiError as ex:
             LOGGER.error('Error query: %s', str(ex))
             
-    drivers = [{'driver': 'GV2', 'value': 0, 'uom': 2},
-                {'driver': 'CLITEMP', 'value': 0, 'uom': 4},
-                {'driver': 'GV3', 'value': 0, 'uom': 2},
-                {'driver': 'GV4', 'value': 0, 'uom': 25},
-                {'driver': 'GV5', 'value': 0, 'uom': 25},
-                {'driver': 'GV6', 'value': 0, 'uom': 25},
-                {'driver': 'GV7', 'value': 0, 'uom': 17} ]
+    drivers = [{'driver': 'GV2', 'value': 0, 'uom': 2, 'name': 'Status'},
+               {'driver': 'CLITEMP', 'value': 0, 'uom': 4, 'name': 'Temperature C'},
+               {'driver': 'GV3', 'value': 0, 'uom': 2, 'name': 'Home'},
+               {'driver': 'GV4', 'value': 0, 'uom': 25, 'name': 'Mode'},
+               {'driver': 'GV5', 'value': 0, 'uom': 25, 'name': 'Away Mode'},
+               {'driver': 'GV6', 'value': 0, 'uom': 25, 'name': 'Setpoint Mode'},
+               {'driver': 'GV7', 'value': 0, 'uom': 17, 'name': 'Temperature F'} ]
     
     id = 'FLAIR_STRUCT'
     commands = {'SET_MODE' : setMode, 
@@ -285,36 +333,58 @@ class FlairVent(udi_interface.Node):
         self.reportDrivers()           
             
     def update(self):
+        '''
+        From what I can tell objVent is the data we got during discovery. 
+        We really need to make a call to the API to get updated data and
+        use that.
+
+        objVent.get_rel() seems to get updated data (I.E. calls the API)
+        but it doesn't seem to populate objVent.attributes with it.
+          - duct-temperature-c
+          - duct-pressure
+          - precent-open
+          - system-voltage
+          - rssi
+        '''
+
         try:
             if  self.objVent.attributes['inactive'] is True:
                 self.setDriver('GV2', 1)
             else:
                 self.setDriver('GV2', 0)
 
-            self.setDriver('GV1', self.objVent.attributes['percent-open'])
-            self.setDriver('GV8', self.objVent.attributes['voltage'])
-            
             # Get current-reading
             creading = self.objVent.get_rel('current-reading')
-            self.setDriver('GV9', creading.attributes['duct-pressure'])
+            cat = creading.attributes
+            LOGGER.debug('VENT raw = {}'.format(cat))
+            LOGGER.info('VENT: {} - {} {} {} {} {} {}'.format(self.name, cat['duct-temperature-c'], cat['duct-pressure'], cat['percent-open'], cat['system-voltage'], cat['rssi'], cat['created-at']))
+
+            self.setDriver('GV1', cat['percent-open'])
+            self.setDriver('GV8', cat['system-voltage'])
+
+            self.setDriver('GV9', cat['duct-pressure'])
             
-            tempC = int(creading.attributes['duct-temperature-c'])
-            tempF = (tempC * 9/5) + 32
+            if 'duct-temperature-c' in cat:
+                tempC = float(cat['duct-temperature-c'])
+                tempF = (tempC * 9/5) + 32
             
-            self.setDriver('GV10', tempC)
-            self.setDriver('GV11', tempF)
-            self.setDriver('GV12', creading.attributes['rssi'])
+                self.setDriver('GV10', tempC)
+                self.setDriver('GV11', tempF)
+
+            self.setDriver('GV12', cat['rssi'])
         
         except ApiError as ex:
             LOGGER.error('Error query: %s', str(ex))
+        except Exception as err:
+            LOGGER.error('Error vent update: %s', str(err))
              
-    drivers = [{'driver': 'GV2', 'value': 0, 'uom': 2},
-              {'driver': 'GV1', 'value': 0, 'uom': 51},
-              {'driver': 'GV8', 'value': 0, 'uom': 72},
-              {'driver': 'GV9', 'value': 0, 'uom': 31},
-              {'driver': 'GV10', 'value': 0, 'uom': 4},
-              {'driver': 'GV11', 'value': 0, 'uom': 17},
-              {'driver': 'GV12', 'value': 0, 'uom': 56}]
+    drivers = [{'driver': 'GV2', 'value': 0, 'uom': 2, 'name': 'Status'},
+               {'driver': 'GV1', 'value': 0, 'uom': 51, 'name': 'Open'},
+               {'driver': 'GV8', 'value': 0, 'uom': 72, 'name': 'Voltage'},
+               {'driver': 'GV9', 'value': 0, 'uom': 31, 'name': 'Pressure'},
+               {'driver': 'GV10', 'value': 0, 'uom': 4, 'name': 'Temperature C'},
+               {'driver': 'GV11', 'value': 0, 'uom': 17, 'name': 'Temperature F'},
+               {'driver': 'GV12', 'value': 0, 'uom': 56, 'name': 'rssi'}]
     
     id = 'FLAIR_VENT'
     commands = { 'SET_OPEN' : setOpen,
@@ -340,29 +410,42 @@ class FlairPuck(udi_interface.Node):
             else:
                 self.setDriver('GV2', 0)
 
-            LOGGER.debug('puck attributes: {}'.format(self.objPuck.attributes))
-            tempC = int(self.objPuck.attributes['current-temperature-c'])  if self.objPuck.attributes['current-temperature-c'] != None else 0 
-            tempF = (tempC * 9/5) + 32
+            #LOGGER.debug('puck attributes: {}'.format(self.objPuck.attributes))
+            #tempC = float(self.objPuck.attributes['current-temperature-c'])  if self.objPuck.attributes['current-temperature-c'] != None else 0 
+            #tempF = (tempC * 9/5) + 32
                 
-            self.setDriver('CLITEMP', round(tempC,1))
-            self.setDriver('GV7', round(tempF,1))
-            self.setDriver('CLIHUM', self.objPuck.attributes['current-humidity'])
             
             # Get current-reading
             creading = self.objPuck.get_rel('current-reading')
-            LOGGER.debug('puck current-reading: {}'.format(creading))
-            self.setDriver('GV12', creading.attributes['rssi'])
-            self.setDriver('GV8', creading.attributes['system-voltage'])
+            cat = creading.attributes
+            LOGGER.debug('PUCK raw = {}'.format(cat))
+
+            if 'room-temperature-c' in cat:
+                tempC = float(cat['room-temperature-c'])
+                tempF = (tempC * 9/5) + 32
+            else:
+                tempC = 0
+                tempF = 32
+
+            LOGGER.info('PUCK: {} - {} / {} -- {}  {} {} {}'.format(self.name, tempC, tempF, cat['created-at'], cat['humidity'], cat['rssi'], cat['system-voltage']))
+
+            self.setDriver('CLITEMP', round(tempC,1))
+            self.setDriver('GV7', round(tempF,1))
+            self.setDriver('CLIHUM', cat['humidity'])
+            self.setDriver('GV12', cat['rssi'])
+            self.setDriver('GV8', cat['system-voltage'])
                
         except ApiError as ex:
             LOGGER.error('Error query: %s', str(ex))  
+        except Exception as err:
+            LOGGER.error('Error puck update: %s', str(err))
             
-    drivers = [ {'driver': 'GV2', 'value': 0, 'uom': 2},
-                {'driver': 'CLITEMP', 'value': 0, 'uom': 4},
-                {'driver': 'CLIHUM', 'value': 0, 'uom': 51},
-                {'driver': 'GV7', 'value': 0, 'uom': 17},
-                {'driver': 'GV8', 'value': 0, 'uom': 72},
-                {'driver': 'GV12', 'value': 0, 'uom': 56}]
+    drivers = [ {'driver': 'GV2', 'value': 0, 'uom': 2, 'name': 'Status'},
+               {'driver': 'CLITEMP', 'value': 0, 'uom': 4, 'name': 'Temperature C'},
+               {'driver': 'CLIHUM', 'value': 0, 'uom': 51, 'name': 'Humidity'},
+               {'driver': 'GV7', 'value': 0, 'uom': 17, 'name': 'Temperature F'},
+               {'driver': 'GV8', 'value': 0, 'uom': 72, 'name': 'Voltage'},
+               {'driver': 'GV12', 'value': 0, 'uom': 56, 'name': 'rssi'}]
     
     id = 'FLAIR_PUCK'
     commands = {  'QUERY': query }
@@ -379,7 +462,28 @@ class FlairRoom(udi_interface.Node):
     def query(self):
         self.reportDrivers()
     
+    def new_update(self, tempC, humidity, setpoint):
+        try:
+            tempF = (tempC * 9/5) + 32
+            self.setDriver('CLITEMP', round(tempC,1))
+            self.setDriver('GV7',round(tempF,1))
+            if humdidity is None:
+                self.setDriver('CLIHUM',0)
+            else:
+                self.setDriver('CLIHUM', humidity)
+
+            if setpoint is not None:
+                self.setDriver('CLISPC', round(setpoint,1))
+            else:
+                self.setDriver('CLISPC', 0)
+        except Exception as err:
+            LOGGER.error('Error room update: %s', str(err))
+
     def update(self):
+        '''
+        Should we try:  creading = self.objRoom.get_rel()
+        That doesn't seem to work
+        '''
         try:
             if self.objRoom.attributes['active'] is True:
                 self.setDriver('GV2', 0)
@@ -388,7 +492,7 @@ class FlairRoom(udi_interface.Node):
 
             if self.objRoom.attributes['current-temperature-c'] is not None :
                 
-                tempC = int(self.objRoom.attributes['current-temperature-c']) if self.objRoom.attributes['current-temperature-c'] != None else 0 
+                tempC = float(self.objRoom.attributes['current-temperature-c']) if self.objRoom.attributes['current-temperature-c'] != None else 0 
                 tempF = (tempC * 9/5) + 32
                 
                 self.setDriver('CLITEMP', round(tempC,1))
@@ -406,9 +510,13 @@ class FlairRoom(udi_interface.Node):
                 self.setDriver('CLISPC', round(self.objRoom.attributes['set-point-c'],1))
             else:
                 self.setDriver('CLISPC', 0)
+
+            LOGGER.error('BOB-ROOM: {} {} / {} -- {}'.format(self.name, tempC, tempF, self.objRoom.attributes['updated-at']))
          
         except ApiError as ex:
             LOGGER.error('Error query: %s', str(ex))  
+        except Exception as err:
+            LOGGER.error('Error room update: %s', str(err))
     
     def setTemp(self, command):
         try:
@@ -418,11 +526,11 @@ class FlairRoom(udi_interface.Node):
         except ApiError as ex:
             LOGGER.error('Error setTemp: %s', str(ex))
 
-    drivers = [ {'driver': 'GV2', 'value': 0, 'uom': 2},
-                {'driver': 'CLITEMP', 'value': 0, 'uom': 4},
-                {'driver': 'CLIHUM', 'value': 0, 'uom': 51},
-                {'driver': 'CLISPC', 'value': 0, 'uom': 4},
-                {'driver': 'GV7', 'value': 0, 'uom': 17}]
+    drivers = [ {'driver': 'GV2', 'value': 0, 'uom': 2, 'name': 'Status'},
+               {'driver': 'CLITEMP', 'value': 0, 'uom': 4, 'name': 'Temperature C'},
+               {'driver': 'CLIHUM', 'value': 0, 'uom': 51, 'name': 'Humidity'},
+               {'driver': 'CLISPC', 'value': 0, 'uom': 4, 'name': 'Setpoint'},
+               {'driver': 'GV7', 'value': 0, 'uom': 17, 'name': 'Temperature F'}]
     
     id = 'FLAIR_ROOM'
     commands = { 'QUERY': query, 

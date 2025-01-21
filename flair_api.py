@@ -221,6 +221,7 @@ class Client(object):
     def get(self, resource_type, id=None):
         self._fetch_token_if_not()
         self._fetch_api_root_if_not()
+        LOGGER.error('BOB-get: get request for {}'.format(self.resource_url(resource_type, id)))
         return self.handle_resp(
             requests.get(
                 self.create_url(self.resource_url(resource_type, id)),
@@ -300,6 +301,7 @@ class Client(object):
         ))
 
     def get_url(self, url, **params):
+        LOGGER.error('BOB-get_url: get request for {}'.format(self.create_url(url)))
         return self.handle_resp(requests.get(
             self.create_url(url),
             params=params,
@@ -322,16 +324,19 @@ class Client(object):
 
         if resp.status_code == 200 and isinstance(body['data'], list) and \
            body['data']:
-            return ResourceCollection(
-                self,
-                body['meta'],
-                body['data'][0]['type'],
-                [self.create_model(**r) for r in body['data']]
-            )
+               LOGGER.debug('GOT: {}'.format(body['data']))
+
+               return ResourceCollection(
+                       self,
+                       body['meta'],
+                       body['data'][0]['type'],
+                       [self.create_model(**r) for r in body['data']]
+                       )
         elif (resp.status_code == 200 or resp.status_code == 201) and \
              not body['data']:
             raise EmptyBodyException(resp)
         elif resp.status_code == 200 or resp.status_code == 201:
+            LOGGER.debug('Calling create_model with {}'.format(body['data']))
             return self.create_model(**body['data'])
         elif resp.status_code >= 400:
             raise ApiError(resp)

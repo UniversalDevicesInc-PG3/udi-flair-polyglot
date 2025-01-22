@@ -50,7 +50,7 @@ class Controller(udi_interface.Node):
         polyglot.subscribe(polyglot.POLL, self.poll)
 
         polyglot.ready()
-        polyglot.addNode(self)
+        #polyglot.addNode(self)
 
     def parameterHandler(self, params):
         self.poly.Notices.clear()
@@ -282,7 +282,7 @@ class FlairStructure(udi_interface.Node):
             tempF = (tempC * 9/5) + 32
             LOGGER.error('BOB-STRUCTURE: {} / {} / {} -- {}'.format(self.name, tempC, tempF, self.objStructure.attributes['created-at']))
             
-            self.setDriver('CLITEMP', round(tempC,1))
+            self.setDriver('CLISPC', round(tempC,1))
             self.setDriver('GV7', round(tempF,1))
 
             if  self.objStructure.attributes['home'] is True:
@@ -298,12 +298,12 @@ class FlairStructure(udi_interface.Node):
             LOGGER.error('Error query: %s', str(ex))
             
     drivers = [{'driver': 'GV2', 'value': 0, 'uom': 2, 'name': 'Status'},
-               {'driver': 'CLITEMP', 'value': 0, 'uom': 4, 'name': 'Temperature C'},
+               {'driver': 'CLISPC', 'value': 0, 'uom': 4, 'name': 'Setpoint C'},
                {'driver': 'GV3', 'value': 0, 'uom': 2, 'name': 'Home'},
                {'driver': 'GV4', 'value': 0, 'uom': 25, 'name': 'Mode'},
                {'driver': 'GV5', 'value': 0, 'uom': 25, 'name': 'Away Mode'},
                {'driver': 'GV6', 'value': 0, 'uom': 25, 'name': 'Setpoint Mode'},
-               {'driver': 'GV7', 'value': 0, 'uom': 17, 'name': 'Temperature F'} ]
+               {'driver': 'GV7', 'value': 0, 'uom': 17, 'name': 'Setpoint F'} ]
     
     id = 'FLAIR_STRUCT'
     commands = {'SET_MODE' : setMode, 
@@ -455,7 +455,7 @@ class FlairRoom(udi_interface.Node):
     def __init__(self, controller, primary, address, name,room):
 
         super(FlairRoom, self).__init__(controller, primary, address, name)
-        self.queryON = True
+        self.queryON = False
         self.name = name
         self.objRoom = room
         
@@ -464,10 +464,18 @@ class FlairRoom(udi_interface.Node):
     
     def new_update(self, tempC, humidity, setpoint):
         try:
-            tempF = (tempC * 9/5) + 32
-            self.setDriver('CLITEMP', round(tempC,1))
-            self.setDriver('GV7',round(tempF,1))
-            if humdidity is None:
+            if self.objRoom.attributes['active'] is True:
+                self.setDriver('GV2', 0)
+            else:
+                self.setDriver('GV2', 1)
+
+            LOGGER.info('ROOM: {} {} / {} / {}'.format(self.name, tempC, humidity, setpoint))
+
+            if tempC is not None:
+                tempF = (tempC * 9/5) + 32
+                self.setDriver('CLITEMP', round(tempC,1))
+                self.setDriver('GV7',round(tempF,1))
+            if humidity is None:
                 self.setDriver('CLIHUM',0)
             else:
                 self.setDriver('CLIHUM', humidity)
@@ -480,6 +488,9 @@ class FlairRoom(udi_interface.Node):
             LOGGER.error('Error room update: %s', str(err))
 
     def update(self):
+        LOGGER.debug('update not implemented this way')
+
+    def old_update(self):
         '''
         Should we try:  creading = self.objRoom.get_rel()
         That doesn't seem to work
@@ -511,7 +522,6 @@ class FlairRoom(udi_interface.Node):
             else:
                 self.setDriver('CLISPC', 0)
 
-            LOGGER.error('BOB-ROOM: {} {} / {} -- {}'.format(self.name, tempC, tempF, self.objRoom.attributes['updated-at']))
          
         except ApiError as ex:
             LOGGER.error('Error query: %s', str(ex))  

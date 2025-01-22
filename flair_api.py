@@ -221,7 +221,7 @@ class Client(object):
     def get(self, resource_type, id=None):
         self._fetch_token_if_not()
         self._fetch_api_root_if_not()
-        LOGGER.error('BOB-get: get request for {}'.format(self.resource_url(resource_type, id)))
+        LOGGER.debug('API: get request for {}'.format(self.resource_url(resource_type, id)))
         return self.handle_resp(
             requests.get(
                 self.create_url(self.resource_url(resource_type, id)),
@@ -301,7 +301,7 @@ class Client(object):
         ))
 
     def get_url(self, url, **params):
-        LOGGER.error('BOB-get_url: get request for {}'.format(self.create_url(url)))
+        LOGGER.debug('API: get request for {}'.format(self.create_url(url)))
         return self.handle_resp(requests.get(
             self.create_url(url),
             params=params,

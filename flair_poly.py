@@ -269,10 +269,13 @@ class FlairStructure(udi_interface.Node):
                 rnode = self.poly.getNode(strHashRoom)
 
                 # temperature (c and f), humidity, setpoint 
-                LOGGER.error('TODO: Update node {} --> {} {} {}'.format(rnode.name, room.attributes['current-temperature-c'], room.attributes['current-humidity'], room.attributes['set-point-c']))
                 rnode.new_update(room.attributes['current-temperature-c'], room.attributes['current-humidity'], room.attributes['set-point-c'])
 
 
+            '''
+            Not sure why this is being done.  As far as I can tell, these values
+            are never queried after discovery.
+            '''
             if  self.objStructure.attributes['is-active'] is True:
                 self.setDriver('GV2', 1)
             else:
@@ -280,7 +283,7 @@ class FlairStructure(udi_interface.Node):
             
             tempC = float(self.objStructure.attributes['set-point-temperature-c'])
             tempF = (tempC * 9/5) + 32
-            LOGGER.error('BOB-STRUCTURE: {} / {} / {} -- {}'.format(self.name, tempC, tempF, self.objStructure.attributes['created-at']))
+            LOGGER.error('STRUCTURE: {} / {} / {} -- {}'.format(self.name, tempC, tempF, self.objStructure.attributes['created-at']))
             
             self.setDriver('CLISPC', round(tempC,1))
             self.setDriver('GV7', round(tempF,1))
@@ -368,8 +371,8 @@ class FlairVent(udi_interface.Node):
                 tempC = float(cat['duct-temperature-c'])
                 tempF = (tempC * 9/5) + 32
             
-                self.setDriver('GV10', tempC)
-                self.setDriver('GV11', tempF)
+                self.setDriver('GV10', round(tempC,2))
+                self.setDriver('GV11', round(tempF,2))
 
             self.setDriver('GV12', cat['rssi'])
         

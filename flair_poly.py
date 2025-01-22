@@ -18,8 +18,7 @@ from flair_api import ApiError
 from flair_api import EmptyBodyException
 
 LOGGER = udi_interface.LOGGER
-SERVERDATA = json.load(open('server.json'))
-VERSION = SERVERDATA['credits'][0]['version']
+VERSION = '3.0.1'
 
 def get_profile_info(logger):
     pvf = 'profile/version.txt'
@@ -552,7 +551,7 @@ class FlairRoom(udi_interface.Node):
 if __name__ == "__main__":
     try:
         polyglot = udi_interface.Interface([])
-        polyglot.start('3.0.1')
+        polyglot.start(VERSION)
         Controller(polyglot, 'controller', 'controller', 'FlairNodeServer')
         polyglot.runForever()
     except (KeyboardInterrupt, SystemExit):
